@@ -1,7 +1,6 @@
-(use trace srfi-4 miscmacros bitstring srfi-18 tcp)
-
-(define (log . args)
-  (apply fprintf (current-error-port) args))
+(module midi (read-midi)
+(import (except scheme log) chicken)
+(use srfi-4 miscmacros bitstring)
 
 (define log void)
 
@@ -14,14 +13,6 @@
 (define s/tick 0)
 
 (define in-track 0)
-
-(define (noteon note vel)
-  (fprintf out "list ~A ~A;" note vel)
-  (flush-output out))
-
-(define (noteoff note vel)
-  (fprintf out "list ~A 0;" note)
-  (flush-output out))
 
 (define tracks '())
 
@@ -52,13 +43,15 @@
 
 
 #;(trace reg-track reg-name reg-delta noteon noteoff)
+
+(define (read-midi filename)
+  (read-header
+    (with-input-from-file filename read-u8vector))
+  (reg-track) ;; register the last track
+  (begin0 tracks (set! tracks '())))
+
 ;; END TEST
 
-
-(define data
-  (with-input-from-file "test.mid"
-    (lambda ()
-      (read-u8vector))))
 
 ;; Variable length integers encoding
 (define (read-vli bs)
@@ -284,7 +277,4 @@
             (log "Pitch Bend on channel ~A: ~X ~X~%"
                  channel data1 data2)))
          rest)))))
-
-(read-header data)
-(reg-track) ;; register last track
-(pp tracks)
+)
