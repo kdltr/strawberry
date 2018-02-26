@@ -1,7 +1,8 @@
 (import scheme chicken srfi-1 srfi-4)
 (use (prefix sdl2 sdl2:) midi posix 
      new-random srfi-4 data-structures
-     (prefix portaudio pa:))
+     (prefix portaudio pa:)
+     miscmacros)
 
 (set-signal-handler! signal/int exit)
 (set-signal-handler! signal/term exit)
@@ -62,11 +63,29 @@
       (safe (load graphics-file)))
     (set! file-mod new-mod)))
 
+(define (handle-events)
+  (let ((ev (sdl2:poll-event!)))
+    (when ev
+      (handle-event ev)
+      (handle-events))))
+
+;; disable uninteresting events
+(for-each (lambda (type) (set! (sdl2:event-state type) #f))
+  '(text-editing text-input mouse-motion mouse-button-down
+    mouse-button-up mouse-wheel joy-axis-motion joy-ball-motion
+    joy-hat-motion joy-button-down joy-button-up joy-device-added
+    joy-device-removed controller-axis-motion
+    controller-device-added controller-device-removed
+    controller-device-remapped finger-down finger-up
+    finger-motion dollar-gesture dollar-record
+    multi-gesture clipboard-update drop-file))
+
 (let loop ()
   (reload-graphics)
   (let ((t (sdl2:get-ticks)))
     (set! dt (/ (- t now) 1000))
     (set! now t))
+  (handle-events)
   (unless dirty
     (safe (show-frame)))
   (sdl2:render-present! render)

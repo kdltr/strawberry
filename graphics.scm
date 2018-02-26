@@ -31,17 +31,26 @@
                              (triangle~ 0))))
 (define next-channel 0)
 
+(define metro-tempo (/ us/qnote 1000000))
+(printf "~A seconds per note~%" metro-tempo)
+(define metro-t (- metro-tempo 1))
+(define metro (make-channel (envelope~ 0.01 0.25)
+                            (sin~ 0)))
+
 (define dspbuf (make-f32vector 512 0 #t #t))
 
 (define (dac~)
-  (let lp ((i 0) (sample 0))
-    (if (= i num-channels)
-        sample
-        (let ((chan (vector-ref channels i)))
-          (lp (add1 i)
-              (+ sample (* (/ 1 num-channels)
-                           ((channel-env chan))
-                           ((channel-osc chan)))))))))
+  (+ (* 0.3
+        ((channel-env metro))
+        ((channel-osc metro)))
+     (let lp ((i 0) (sample 0))
+       (if (= i num-channels)
+           sample
+           (let ((chan (vector-ref channels i)))
+             (lp (add1 i)
+                 (+ sample (* (/ 1 num-channels)
+                              ((channel-env chan))
+                              ((channel-osc chan))))))))))
 
 
 (define rect (sdl2:make-rect 0 0 10 10))
@@ -67,9 +76,53 @@
       (set! track (cdr track))
       (unless (null? track) (blink-on-note)))))
 
+(define *input-track* '())
+(define *input-t* 0)
+
+(define tolerence-perfect (/ metro-tempo 32))
+(define tolerence-good (/ metro-tempo 16))
+(define tolerence-bad (/ metro-tempo 8))
+
+(define (register-input)
+  (push! *input-t* *input-track*)
+  (set! *input-t* 0)
+  (let* ((next-event (car track))
+         (next-dt (car next-event))
+         (diff (- next-dt midi-time)))
+    (cond ((= midi-time 0)
+           (print "SUPER PERFECT"))
+          ((or (> tolerence-perfect midi-time)
+               (> tolerence-perfect diff))
+           (print "PERFECT"))
+          ((or (> tolerence-good midi-time)
+               (> tolerence-good diff))
+           (print "GOOD"))
+          ((or (> tolerence-bad midi-time)
+               (> tolerence-bad diff))
+           (print "BAD"))
+          (else (print "MISSED")))))
+
+
+(define (handle-event ev)
+  (cond ((and (eq? (sdl2:event-type ev) 'key-down)
+              (eq? (sdl2:keyboard-event-scancode ev)
+                   'space))
+         (register-input)))
+  )
+
 (define (show-frame)
   (unless (null? track)
     (blink-on-note))
+  
+  (when (null? track)
+    (print (reverse *input-track*)))
+  
+  (set! *input-t* (+ *input-t* dt))
+  (set! metro-t (+ metro-t dt))
+  (when (>= metro-t metro-tempo)
+    ((channel-env metro) 'reset)
+    ((channel-osc metro) 'freq 437)
+    (set! metro-t 0))
 
   (set! (sdl2:render-draw-color render) white)
   (sdl2:render-clear! render)

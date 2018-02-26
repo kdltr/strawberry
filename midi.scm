@@ -1,4 +1,4 @@
-(module midi (read-midi)
+(module midi (read-midi us/qnote)
 (import (except scheme log) chicken)
 (use srfi-4 miscmacros bitstring)
 
