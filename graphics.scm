@@ -1,22 +1,48 @@
 (void)
 
-(define dspbuf (make-f32vector 512 0 #t #t))
+(define (count-channels evts num-channels max-channels)
+  (cond ((null? evts)
+         max-channels)
+        ((eq? (car evts) 'noteon)
+         (count-channels (cdr evts)
+                         (add1 num-channels)
+                         (max (add1 num-channels) max-channels)))
+        ((eq? (car evts) 'noteoff)
+         (count-channels (cdr evts)
+                         (sub1 num-channels)
+                         max-channels))))
 
-(load "dsp.so")
-
-(define *note* #f)
-(define (dac~)
-  (if *note*
-      (pseudo-random-real)
-      0))
-
-(define pi (acos -1))
 (define white (sdl2:make-color 255 255 255))
 (define black (sdl2:make-color 0 0 0))
 (define red (sdl2:make-color 255 0 0))
 
 (define midi-time -1)
-(define track (alist-ref "blerb" midi equal?))
+(printf "MIDI tracks: ~S~%" (map car midi))
+(define track (alist-ref "input" midi equal?))
+
+(define num-channels (count-channels (map cadr track) 0 0))
+(printf "Allocating ~A channels for track.~%" num-channels)
+(define-record channel env osc)
+(define channels (make-vector num-channels))
+(do ((i 0 (add1 i)))
+    ((= i num-channels))
+  (vector-set! channels i
+               (make-channel (envelope~ 0.01 1)
+                             (triangle~ 0))))
+(define next-channel 0)
+
+(define dspbuf (make-f32vector 512 0 #t #t))
+
+(define (dac~)
+  (let lp ((i 0) (sample 0))
+    (if (= i num-channels)
+        sample
+        (let ((chan (vector-ref channels i)))
+          (lp (add1 i)
+              (+ sample (* (/ 1 num-channels)
+                           ((channel-env chan))
+                           ((channel-osc chan)))))))))
+
 
 (define rect (sdl2:make-rect 0 0 10 10))
 (define *scale* 10)
@@ -24,35 +50,42 @@
 (define (blink-on-note)
   (let* ((evt (car track))
          (evt-dt (car evt))
-         (type (cadr evt)))
+         (type (cadr evt))
+         (data (cddr evt)))
     (when (and (>= midi-time evt-dt))
       (when (eq? type 'noteon)
+        (print "playing on channel " next-channel)
         (set! *scale* 10)
-        (set! *note* #t))
+        (let ((chan (vector-ref channels next-channel)))
+          ((channel-osc chan) 'freq (midi->freq (car data)))
+          ((channel-env chan) 'reset))
+        (set! next-channel (add1 next-channel))
+        )
       (when (eq? type 'noteoff)
-        (set! *note* #f))
+        (set! next-channel (sub1 next-channel)))
       (set! midi-time 0)
-      (set! track (cdr track)))))
-
+      (set! track (cdr track))
+      (unless (null? track) (blink-on-note)))))
 
 (define (show-frame)
   (unless (null? track)
     (blink-on-note))
-  
+
   (set! (sdl2:render-draw-color render) white)
   (sdl2:render-clear! render)
-  
+
   (set! (sdl2:render-draw-color render) red)
   (set! (sdl2:render-scale render) (list *scale* *scale*))
   (sdl2:render-fill-rect! render rect)
-  
-  (set! midi-time (+ midi-time dt))
+  (set! (sdl2:render-scale render) (list 1 1))
+
+  (set! midi-time (+ midi-time  dt))
   (set! *scale* (max 0 (- *scale* (* dt 5))))
-  
+
   (let* ((avail (pa:stream-write-available))
          (len (min avail 512)))
+    (when (> len 512) (print len))
     (unless (zero? len)
       (fill-buf! dspbuf len)
-      (pa:write-stream! dspbuf len))
-    )
-  #;(thread-sleep! 0.25))
+      (pa:write-stream! dspbuf len)))
+)

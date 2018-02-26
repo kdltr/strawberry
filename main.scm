@@ -1,6 +1,7 @@
-(import scheme chicken srfi-1)
-(use (prefix sdl2 sdl2:) midi posix (prefix portaudio pa:)
-     new-random)
+(import scheme chicken srfi-1 srfi-4)
+(use (prefix sdl2 sdl2:) midi posix 
+     new-random srfi-4 data-structures
+     (prefix portaudio pa:))
 
 (set-signal-handler! signal/int exit)
 (set-signal-handler! signal/term exit)
@@ -8,22 +9,27 @@
 (define graphics-file (car (command-line-arguments)))
 (define midi (read-midi (cadr (command-line-arguments))))
 
-(define ww 800)
-(define wh 480)
+(define ww 192)
+(define wh 256)
 
 (sdl2:set-hint! 'render-scale-quality "0")
 (sdl2:set-main-ready!)
 (sdl2:init! '(video))
 
 (define window (sdl2:create-window! "Confiture de fraises"
-                                    0 0 400 240))
+                                    0 0 (* ww 2) (* wh 2)))
 (define render (sdl2:create-renderer! window -1 '(accelerated)))
 (set! (sdl2:render-logical-size render) (list ww wh))
 
 
 (pa:init!)
-(pa:open-stream! 44100)
+(pa:open-stream! 22050)
 (pa:start-stream!)
+
+(load "dsp.so")
+(define *sample-rate* 22050)
+(define pi (acos -1))
+(define 2pi (* 2 pi))
 
 (on-exit (lambda ()
            (print "terminating")
@@ -65,4 +71,3 @@
     (safe (show-frame)))
   (sdl2:render-present! render)
   (loop))
-
