@@ -82,7 +82,7 @@
      (log "MIDI format: ~A. ~A track(s), ~A ticks per quarter-note~%"
           format tracks division-spec)
      (set! ticks/qnote division-spec)
-     (read-track 3 rest))
+     (read-track tracks rest))
     (((""))
      'ok)
     (else
