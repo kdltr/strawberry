@@ -7,13 +7,20 @@
 (define black (sdl2:make-color 0 0 0))
 (define red (sdl2:make-color 255 0 0))
 
+(define (noteon? ev)
+  (eq? (cadr ev) 'noteon))
+
+(define *midi-time* 0)
+(define *last-player-event* -inf.0)
 
 (printf "MIDI tracks: ~S~%" (map car midi))
 
 (define input-track
-  (make-track 0 (alist-ref "input" midi equal?)))
+  (make-track 0 (filter noteon? (alist-ref "input" midi equal?))))
 (define input-channel
   (make-channel 0 (envelope~ 0 0) (sin~ 0)))
+
+(print (track-data input-track))
 
 (define chords-track
   (make-track 0 (alist-ref "chords" midi equal?)))
@@ -30,12 +37,12 @@
   (make-track 0 (alist-ref "lead" midi equal?)))
 (define lead-channel (make-channel 0
                                    (envelope~ 0.01 0.25)
-                                   (pulse~ 0 0.5)))
+                                   (triangle~ 0 0.5)))
 
 (define bass-track
   (make-track 0 (alist-ref "bass" midi equal?)))
 (define bass-channel (make-channel 0
-                                   (envelope~ 0.01 0.125)
+                                   (envelope~ 0.01 1)
                                    (triangle~ 0)))
 
 (define perc-track
@@ -55,15 +62,14 @@
                 (vector-ref chord-channels 2))))
 
 (define (advance-track track channel #!optional (chord? #f))
-  (let ((data (track-data track))
-        (time (track-dt track)))
+  (let ((data (track-data track)))
     (unless (null? data)
       (let* ((next-evt (car data))
              (next-evt-dt (car next-evt))
              (next-evt-type (cadr next-evt))
              (next-evt-note (caddr next-evt))
              (next-evt-velocity (cadddr next-evt)))
-        (if (>= time next-evt-dt)
+        (if (>= *midi-time* next-evt-dt)
             (begin
               (cond ((eq? next-evt-type 'noteon)
                      ((channel-env channel) 'reset)
@@ -82,10 +88,8 @@
                          (sub1 (max 1 *next-chord-channel*))))
                        ))
               (track-data-set! track (cdr data))
-              (track-dt-set! track 0)
               next-evt-type)
             (begin
-              (track-dt-set! track (+ time dt))
               #f))))))
 
 (define dspbuf (make-f32vector 512 0 #t #t))
@@ -94,7 +98,7 @@
   (fold
         (lambda (c sample)
           (+ sample
-             (* 0.2
+             (* 0.5
                 (channel-vol c)
                 ((channel-env c))
                 ((channel-osc c)))))
@@ -107,23 +111,19 @@
 (define *player-next-note* 0)
 
 (define (blink-on-note)
-  (let ((data (track-data input-track))
-        (midi-time (track-dt input-track)))
+  (let ((data (track-data input-track)))
     (unless (null? data)
       (let* ((evt (car data))
              (evt-dt (car evt))
              (evt-type (cadr evt))
              (evt-note (caddr evt)))
-        (cond ((>= midi-time evt-dt)
-               (when
-                 (eq? evt-type 'noteon)
-                 (set! *scale* 10)
-                 (set! *player-next-note* evt-note))
-               (track-dt-set! input-track 0)
+        (cond ((>= *midi-time* evt-dt)
+               (set! *scale* 10)
+               (set! *last-player-event* evt-dt)
+               (set! *player-next-note* evt-note)
                (track-data-set! input-track (cdr data))
                #t)
               (else
-                (track-dt-set! input-track (+ midi-time dt))
                 #f))))))
 
 ;; TODO tweak that
@@ -132,18 +132,18 @@
 
 (define (register-input)
   (let* ((data (track-data input-track))
-         (time (track-dt input-track))
          (next-event (car data))
          (next-dt (car next-event))
          (next-type (cadr next-event))
-         (diff (- next-dt time)))
-    (cond ((= time 0)
+         (diff-next (- next-dt *midi-time*))
+         (diff-prev (- *midi-time* *last-player-event*))
+         (diff (min diff-next diff-prev)))
+    (print (list next: diff-next prev: diff-prev diff: diff))
+    (cond ((= diff 0)
            (print "PERFECT"))
-          ((or (> tolerence-good time)
-               (> tolerence-good diff))
+          ((> tolerence-good diff)
            (print "GOOD"))
-          ((or (> tolerence-bad time)
-               (> tolerence-bad diff))
+          ((> tolerence-bad diff)
            (print "BAD"))
           (else (print "MISSED")))))
 
@@ -181,4 +181,5 @@
     (unless (zero? len)
       (fill-buf! dspbuf len)
       (pa:write-stream! dspbuf len)))
+  (set! *midi-time* (+ *midi-time* dt))
 )

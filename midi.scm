@@ -18,19 +18,20 @@
 
 (define current-name #f)
 (define current-track '())
-(define current-delta #f)
+(define current-delta 0)
 
 (define (reg-track)
   (unless (null? current-track)
     (push! (cons current-name (reverse current-track)) tracks)
     (set! current-name #f)
-    (set! current-track '())))
+    (set! current-track '())
+    (set! current-delta 0)))
 
 (define (reg-name name)
   (set! current-name name))
 
 (define (reg-delta dt)
-  (set! current-delta dt))
+  (set! current-delta (+ current-delta dt)))
 
 (define (noteon note vel)
   (push! (list current-delta 'noteon note vel)
