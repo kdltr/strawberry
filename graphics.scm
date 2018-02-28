@@ -6,6 +6,25 @@
 (define white (sdl2:make-color 255 255 255))
 (define black (sdl2:make-color 0 0 0))
 (define red (sdl2:make-color 255 0 0))
+(define blue (sdl2:make-color 0 0 255))
+
+(define (ld fn)
+  (let ((surf (img:load* fn)))
+    (begin0
+      (sdl2:create-texture-from-surface render surf)
+      (sdl2:free-surface! surf))))
+
+(define %bg (ld "bg.png"))
+(define %oizo-normal (ld "oizo_normal.png"))
+(define %oizo-pi (ld "oizo_pi.png"))
+(define %oizo-happy (ld "oizo_happy.png"))
+(define %oizo-meh (ld "oizo_meh.png"))
+(define %oizo-angry (ld "oizo_angry.png"))
+(define %you-normal (ld "you_normal.png"))
+(define %you-up (ld "you_up.png"))
+(define %you-down (ld "you_down.png"))
+(define %you-happy (ld "you_happy.png"))
+(define %you-sad (ld "you_sad.png"))
 
 (define (noteon? ev)
   (eq? (cadr ev) 'noteon))
@@ -13,9 +32,14 @@
 (define (track-ended? tr)
   (null? (track-data tr)))
 
+(define *anim-time* 0)
+(define tempo (/ us/qnote 4000000))
 (define *midi-time* 0)
+(define *oizo-frame* %oizo-normal)
+(define *you-frame* %you-normal)
 (define *last-player-event* -inf.0)
 
+(print "Tempo: " tempo)
 (printf "MIDI tracks: ~S~%" (map car midi))
 
 (define input-track
@@ -82,6 +106,9 @@
                       'freq (midi->freq next-evt-note))
                      (channel-vol-set! channel
                        (/ next-evt-velocity 127))
+                     (when (eq? track lead-track)
+                       (set! *oizo-frame* %oizo-pi)
+                       (set! *anim-time* tempo))
                      (when chord?
                        (set! *next-chord-channel*
                          (add1 (min 1 *next-chord-channel*)))))
@@ -109,11 +136,6 @@
         0
         all-channels*))
 
-
-(define rect (sdl2:make-rect 0 0 10 10))
-(define *scale* 10)
-(define *player-next-note* 0)
-
 (define (blink-on-note)
   (let ((data (track-data input-track)))
     (unless (null? data)
@@ -122,9 +144,7 @@
              (evt-type (cadr evt))
              (evt-note (caddr evt)))
         (cond ((>= *midi-time* evt-dt)
-               (set! *scale* 10)
                (set! *last-player-event* evt-dt)
-               (set! *player-next-note* evt-note)
                (track-data-set! input-track (cdr data))
                (blink-on-note)) )))))
 
@@ -142,13 +162,23 @@
              (diff-prev (- *midi-time* *last-player-event*))
              (diff (min diff-next diff-prev)))
         (print (list next: diff-next prev: diff-prev diff: diff))
-        (cond ((= diff 0)
-               (print "PERFECT"))
-              ((> tolerence-good diff)
+        (set! *anim-time* (* 8 tempo))
+        (set! *you-frame*
+          (cond ((eq? *you-frame* %you-down)
+               %you-up)
+              ((eq? *you-frame* %you-up)
+               %you-down)
+              (else %you-up)))
+        (cond ((> tolerence-good diff)
+               (set! *oizo-frame* %oizo-normal)
                (print "GOOD"))
               ((> tolerence-bad diff)
+               (set! *oizo-frame* %oizo-meh)
                (print "BAD"))
-              (else (print "MISSED")))))))
+              (else
+                (set! *oizo-frame* %oizo-meh)
+                (print "MISSED")
+                ))))))
 
 
 (define (handle-event ev)
@@ -160,23 +190,21 @@
   (void)
   )
 
-(define (show-frame)
+(define (show-game-frame)
   (for-each advance-track all-tracks all-channels)
   (advance-track chords-track
                  (vector-ref chord-channels
                              (min 2 *next-chord-channel*))
                  #t)
   (blink-on-note)
+  
+  (when (<= *anim-time* 0)
+    (set! *oizo-frame* %oizo-normal)
+    (set! *you-frame* %you-normal))
 
-  (set! (sdl2:render-draw-color render) white)
-  (sdl2:render-clear! render)
-
-  (set! (sdl2:render-draw-color render) red)
-  (set! (sdl2:render-scale render) (list *scale* *scale*))
-  (sdl2:render-fill-rect! render rect)
-  (set! (sdl2:render-scale render) (list 1 1))
-
-  (set! *scale* (max 0 (- *scale* (* dt 5))))
+  (sdl2:render-copy! render %bg)
+  (sdl2:render-copy! render *oizo-frame*)
+  (sdl2:render-copy! render *you-frame*)
 
   (let* ((avail (pa:stream-write-available))
          (len (min avail 512)))
@@ -184,7 +212,17 @@
     (unless (zero? len)
       (fill-buf! dspbuf len)
       (pa:write-stream! dspbuf len)))
+  
   (set! *midi-time* (+ *midi-time* dt))
+  (set! *anim-time* (- *anim-time* dt))
+  
   (when (every track-ended? all-tracks*)
-    (exit))
+    (set! show-frame show-ending-frame))
 )
+
+(define (show-ending-frame)
+  (set! (sdl2:render-draw-color render) blue)
+  (sdl2:render-clear! render)
+  )
+
+(define show-frame show-game-frame)

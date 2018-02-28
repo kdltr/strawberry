@@ -1,7 +1,8 @@
 (import scheme chicken srfi-1 srfi-4)
-(use (prefix sdl2 sdl2:) midi posix 
-     new-random srfi-4 data-structures
+(use (prefix sdl2 sdl2:)
+     (prefix sdl2-image img:)
      (prefix portaudio pa:)
+     midi posix new-random srfi-4 data-structures
      miscmacros)
 
 (set-signal-handler! signal/int exit)
@@ -10,8 +11,8 @@
 (define graphics-file (car (command-line-arguments)))
 (define midi (read-midi (cadr (command-line-arguments))))
 
-(define ww 192)
-(define wh 256)
+(define ww 256)
+(define wh 192)
 
 (sdl2:set-hint! 'render-scale-quality "0")
 (sdl2:set-main-ready!)
