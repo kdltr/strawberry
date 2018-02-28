@@ -1,4 +1,4 @@
-(use srfi-4 miscmacros new-random sndfile)
+(use srfi-4 miscmacros sndfile)
 
 (define (modf x) (- x (truncate x)))
 

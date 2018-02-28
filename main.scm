@@ -2,7 +2,7 @@
 (use (prefix sdl2 sdl2:)
      (prefix sdl2-image img:)
      (prefix portaudio pa:)
-     midi posix new-random srfi-4 data-structures
+     midi posix srfi-4 data-structures
      miscmacros)
 
 (set-signal-handler! signal/int exit)
