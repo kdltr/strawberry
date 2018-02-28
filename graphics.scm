@@ -10,6 +10,9 @@
 (define (noteon? ev)
   (eq? (cadr ev) 'noteon))
 
+(define (track-ended? tr)
+  (null? (track-data tr)))
+
 (define *midi-time* 0)
 (define *last-player-event* -inf.0)
 
@@ -53,6 +56,8 @@
 
 (define all-tracks
   (list lead-track bass-track perc-track))
+(define all-tracks* (cons chords-track all-tracks))
+
 (define all-channels
   (list lead-channel bass-channel perc-channel))
 (define all-channels*
@@ -88,9 +93,8 @@
                          (sub1 (max 1 *next-chord-channel*))))
                        ))
               (track-data-set! track (cdr data))
-              next-evt-type)
-            (begin
-              #f))))))
+              (unless chord? (advance-track track channel)))
+            )))))
 
 (define dspbuf (make-f32vector 512 0 #t #t))
 
@@ -122,30 +126,29 @@
                (set! *last-player-event* evt-dt)
                (set! *player-next-note* evt-note)
                (track-data-set! input-track (cdr data))
-               #t)
-              (else
-                #f))))))
+               (blink-on-note)) )))))
 
 ;; TODO tweak that
 (define tolerence-good 0.1)
 (define tolerence-bad 0.250)
 
 (define (register-input)
-  (let* ((data (track-data input-track))
-         (next-event (car data))
-         (next-dt (car next-event))
-         (next-type (cadr next-event))
-         (diff-next (- next-dt *midi-time*))
-         (diff-prev (- *midi-time* *last-player-event*))
-         (diff (min diff-next diff-prev)))
-    (print (list next: diff-next prev: diff-prev diff: diff))
-    (cond ((= diff 0)
-           (print "PERFECT"))
-          ((> tolerence-good diff)
-           (print "GOOD"))
-          ((> tolerence-bad diff)
-           (print "BAD"))
-          (else (print "MISSED")))))
+  (let ((data (track-data input-track)))
+    (unless (null? data)
+      (let* ((next-event (car data))
+             (next-dt (car next-event))
+             (next-type (cadr next-event))
+             (diff-next (- next-dt *midi-time*))
+             (diff-prev (- *midi-time* *last-player-event*))
+             (diff (min diff-next diff-prev)))
+        (print (list next: diff-next prev: diff-prev diff: diff))
+        (cond ((= diff 0)
+               (print "PERFECT"))
+              ((> tolerence-good diff)
+               (print "GOOD"))
+              ((> tolerence-bad diff)
+               (print "BAD"))
+              (else (print "MISSED")))))))
 
 
 (define (handle-event ev)
@@ -182,4 +185,6 @@
       (fill-buf! dspbuf len)
       (pa:write-stream! dspbuf len)))
   (set! *midi-time* (+ *midi-time* dt))
+  (when (every track-ended? all-tracks*)
+    (exit))
 )
