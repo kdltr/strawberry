@@ -1,4 +1,4 @@
-(use srfi-4 miscmacros new-random)
+(use srfi-4 miscmacros new-random sndfile)
 
 (define (modf x) (- x (truncate x)))
 
@@ -83,6 +83,33 @@
              (set! 7bit (cadr args))
              (set! reg #x40))))))
 
+(define (load-sound-file filename)
+  (let ((ret #f)) ;; TODO send patch to sndfile
+    (with-sound-from-file filename
+      (lambda (handle format sample-rate channels frames)
+        (assert (= sample-rate *sample-rate*))
+        (assert (= channels 1))
+        (let ((table (make-f32vector frames 0 #t #t)))
+          (read-items!/f32 handle table)
+          (set! ret table))
+        ))
+    ret))
+
+(define (table~ filename freq)
+  (let* ((tbl (load-sound-file filename))
+         (len (f32vector-length tbl))
+         (step (* len (/ freq *sample-rate*)))
+         (t 0))
+    (lambda args
+      (cond ((null? args)
+             (begin0 (f32vector-ref tbl (inexact->exact (truncate t)))
+                     (set! t (+ t step))
+                     (when (>= t len)
+                       (set! t (- t len)))))
+            ((eq? (car args) 'freq)
+             (set! step (* len (/ (cadr args) *sample-rate*))))
+            (else #f)))))
+
 (define (ramp~ dur)
   (let ((cur 0))
     (lambda args
@@ -94,20 +121,23 @@
 
 (define (envelope~ attack release)
   (let ((t 0)
+        (up? #t)
         (up (ramp~ attack))
         (down (ramp~ release)))
     (lambda args
       (cond ((null? args)
              (begin0
+               #;(if up? (up) (+ 1 (* -1 (down))))
                (if (< t attack)
                    (up)
                    (+ 1 (* -1 (down))))
                (set! t (+ t (/ 1 *sample-rate*)))))
             ((eq? (car args) 'reset)
              (set! t 0)
+             (set! up? #t)
              (up 'reset)
              (down 'reset))
-            #;((eq? (car args) 'release)
+            ((eq? (car args) 'release)
              (set! up? #f))))))
 
 (define (fill-buf! b l)
