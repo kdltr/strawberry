@@ -8,8 +8,7 @@
 (set-signal-handler! signal/int exit)
 (set-signal-handler! signal/term exit)
 
-(define graphics-file (car (command-line-arguments)))
-(define midi (read-midi (cadr (command-line-arguments))))
+(define midi (read-midi "full.mid"))
 
 (define ww 256)
 (define wh 192)
@@ -28,7 +27,7 @@
 (pa:open-stream! 22050)
 (pa:start-stream!)
 
-(load "dsp.so")
+(include "dsp.scm")
 (define *sample-rate* 22050)
 (define pi (acos -1))
 (define 2pi (* 2 pi))
@@ -39,30 +38,10 @@
            (pa:close-stream!)
            (pa:Pa_Terminate)))
 
-(define-syntax safe
-  (syntax-rules ()
-    ((safe body)
-     (handle-exceptions exn
-       (begin
-         (set! dirty #t)
-         (print-error-message exn)
-         (print-call-chain))
-       body
-       (set! dirty #f)))))
-
-
-(define file-mod (file-modification-time graphics-file))
 (define now (sdl2:get-ticks))
 (define dt 0)
-(define dirty #f)
 
-(load graphics-file)
-
-(define (reload-graphics)
-  (let ((new-mod (file-modification-time graphics-file)))
-    (when (> new-mod file-mod)
-      (safe (load graphics-file)))
-    (set! file-mod new-mod)))
+(include "graphics.scm")
 
 (define (handle-events)
   (let ((ev (sdl2:poll-event!)))
@@ -82,12 +61,10 @@
     multi-gesture clipboard-update drop-file))
 
 (let loop ()
-  (reload-graphics)
   (let ((t (sdl2:get-ticks)))
     (set! dt (/ (- t now) 1000))
     (set! now t))
   (handle-events)
-  (unless dirty
-    (safe (show-frame)))
+  (show-frame)
   (sdl2:render-present! render)
   (loop))
