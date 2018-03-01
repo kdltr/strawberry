@@ -52,15 +52,10 @@
 
 (define *ending-frame* #f)
 
-(print "Tempo: " tempo)
-(printf "MIDI tracks: ~S~%" (map car midi))
-
 (define input-track
   (make-track 0 (filter noteon? (alist-ref "input" midi equal?))))
 (define input-channel
   (make-channel 0 (envelope~ 0 0) (sin~ 0)))
-
-(print (track-data input-track))
 
 (define chords-track
   (make-track 0 (alist-ref "chords" midi equal?)))
@@ -225,10 +220,7 @@
              (user-note (if (eq? diff diff-next)
                             (caddr next-event)
                             *last-player-note*)))
-        (print (list next: diff-next prev: diff-prev diff: diff))
         ((channel-env user-channel) 'reset)
-        #;((channel-osc user-channel) 'freq (midi->freq user-note))
-        (print "NOTE = " user-note)
         (set! *anim-time* (* 8 tempo))
         (set! *you-frame*
           (cond ((eq? *you-frame* %you-down)
@@ -240,20 +232,17 @@
                (set! *oizo-frame* %oizo-normal)
                ((channel-osc user-channel)
                 'freq (midi->freq user-note))
-               (push! 3 *last-user-inputs*)
-               (print "GOOD"))
+               (push! 3 *last-user-inputs*))
               ((> tolerence-bad diff) ;; BAD
                (set! *oizo-frame* %oizo-meh)
                ((channel-osc user-channel)
                 'freq (midi->freq (+ 1.5 user-note)))
-               (push! 2 *last-user-inputs*)
-               (print "BAD"))
+               (push! 2 *last-user-inputs*))
               (else ;; MISSED
                 (set! *oizo-frame* %oizo-meh)
                 ((channel-osc user-channel)
                  'freq 55)
                 (push! 1 *last-user-inputs*)
-                (print "MISSED")
                 ))))))
 
 
@@ -288,7 +277,6 @@
 
   (let* ((avail (pa:stream-write-available))
          (len (min avail 512)))
-    (when (> len 512) (print len))
     (unless (zero? len)
       (fill-buf! dspbuf len)
       (pa:write-stream! dspbuf len)))

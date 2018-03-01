@@ -1,5 +1,3 @@
-(use srfi-4 miscmacros sndfile)
-
 (define (modf x) (- x (truncate x)))
 
 (define *base* 440)
@@ -77,40 +75,13 @@
                        (set! t 0))))
             ((eq? (car args) 'freq)
              (set! div (if (> (cadr args) 69)
-                             1/20000)
-                             1/512))
+                             1/20000
+                             1/512)))
             ((eq? (car args) 'div)
              (set! div (cadr args)))
             ((eq? (car args) '7bit)
              (set! 7bit (cadr args))
              (set! reg #x40))))))
-
-(define (load-sound-file filename)
-  (let ((ret #f)) ;; TODO send patch to sndfile
-    (with-sound-from-file filename
-      (lambda (handle format sample-rate channels frames)
-        (assert (= sample-rate *sample-rate*))
-        (assert (= channels 1))
-        (let ((table (make-f32vector frames 0 #t #t)))
-          (read-items!/f32 handle table)
-          (set! ret table))
-        ))
-    ret))
-
-(define (table~ filename freq)
-  (let* ((tbl (load-sound-file filename))
-         (len (f32vector-length tbl))
-         (step (* len (/ freq *sample-rate*)))
-         (t 0))
-    (lambda args
-      (cond ((null? args)
-             (begin0 (f32vector-ref tbl (inexact->exact (truncate t)))
-                     (set! t (+ t step))
-                     (when (>= t len)
-                       (set! t (- t len)))))
-            ((eq? (car args) 'freq)
-             (set! step (* len (/ (cadr args) *sample-rate*))))
-            (else #f)))))
 
 (define (ramp~ dur)
   (let ((cur 0))
