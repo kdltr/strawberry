@@ -123,7 +123,7 @@
                      ((channel-osc channel)
                       'freq (midi->freq next-evt-note))
                      (channel-vol-set! channel
-                       (/ next-evt-velocity 127))
+                       (/ next-evt-velocity 255))
                      (when (eq? track lead-track)
                        (set! *oizo-frame* %oizo-pi)
                        (set! *anim-time* tempo))
