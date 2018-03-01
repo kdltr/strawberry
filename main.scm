@@ -1,8 +1,12 @@
-(import scheme chicken srfi-1 srfi-4)
+(include "portaudio.scm")
+(include "midi.scm")
+(module main ()
+(import scheme chicken srfi-1 srfi-4
+        (prefix portaudio pa:)
+        midi)
 (use (prefix sdl2 sdl2:)
      (prefix sdl2-image img:)
-     (prefix portaudio pa:)
-     midi posix srfi-4 data-structures
+     posix srfi-4 data-structures
      miscmacros)
 
 (set-signal-handler! signal/int exit)
@@ -16,6 +20,7 @@
 (sdl2:set-hint! 'render-scale-quality "0")
 (sdl2:set-main-ready!)
 (sdl2:init! '(video))
+(img:init! '(png))
 
 (define window (sdl2:create-window! "Confiture de fraises"
                                     0 0 (* ww 2) (* wh 2)))
@@ -68,3 +73,4 @@
   (show-frame)
   (sdl2:render-present! render)
   (loop))
+)

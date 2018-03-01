@@ -1,6 +1,5 @@
 (module portaudio *
 (import scheme chicken foreign srfi-4)
-(use concurrent-native-callbacks)
 
 (foreign-declare "#include <portaudio.h>")
 
@@ -60,31 +59,6 @@
                                256
                                #f #f)
          "could not open stream"))
-
-(define-concurrent-native-callback (scheme_callback (unsigned-long len))
-  (pa-buffer-filler len))
-
-(foreign-declare #<<EOF
-static int myCallback(const void* inputBuffer, void* outputBuffer,
-                      unsigned long framesPerBuffer,
-                      const PaStreamCallbackTimeInfo* timeInfo,
-                      PaStreamCallbackFlags statusFlags,
-                      void *userData) {
-  scheme_callback(framesPerBuffer);
-  memcpy(outputBuffer, userData, 2 *  framesPerBuffer * sizeof (float));
-  return 0;
-}
-EOF
-)
-
-(define (open-stream-callback! sr buf)
-  ((foreign-lambda* int (((c-pointer "PaStream") streamp)
-                         (unsigned-long sr)
-                         (nonnull-f32vector buf))
-    "C_return(Pa_OpenDefaultStream(streamp, 0, 2, paFloat32, sr,
-                                            paFramesPerBufferUnspecified,
-                                            myCallback, buf));")
-   (location stream) sr buf))
 
 (define (start-stream!)
   (check (Pa_StartStream stream)
